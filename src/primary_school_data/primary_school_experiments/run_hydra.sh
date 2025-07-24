@@ -1,0 +1,1 @@
+HYDRA_FULL_ERROR=1 python hydra_run_ner_no_trainer.py -m hydra.job.chdir=True
