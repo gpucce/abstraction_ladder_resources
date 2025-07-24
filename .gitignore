@@ -1,4 +1,8 @@
-
+*.ds
+multirun/
+outputs/
+*.xlsx
+*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
