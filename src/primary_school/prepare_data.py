@@ -88,31 +88,32 @@ def create_ds_from_df(df, add_word_spec=False):
 if __name__ == "__main__":
 
     import os
-    os.makedirs('./training_datasets', exist_ok=True)
+    file_dir_path = os.path.dirname(__file__)
+    os.makedirs(os.path.join(file_dir_path, 'training_datasets'), exist_ok=True)
 
-    df_excluded = pd.read_excel('./data_excluded_words.xlsx')
-    df_t1 = pd.read_excel('./data_excluded_words.xlsx', sheet_name="Time1")
-    df_t2 = pd.read_excel('./data_excluded_words.xlsx', sheet_name="Time2")
+    df_excluded = pd.read_excel(os.path.join(file_dir_path, 'data_excluded_words.xlsx'))
+    df_t1 = pd.read_excel(os.path.join(file_dir_path, 'data_excluded_words.xlsx'), sheet_name="Time1")
+    df_t2 = pd.read_excel(os.path.join(file_dir_path, 'data_excluded_words.xlsx'), sheet_name="Time2")
     df_t1 = df_t1.loc[df_t1.n_words_excluded != " "]
 
     ds_t1 = create_ds_from_df(df_t1)
     ds_t2 = create_ds_from_df(df_t2)
 
-    datasets.DatasetDict({"train": ds_t1, "validation": ds_t2}).save_to_disk('./training_datasets/training_t1_test_t2_no_spec.ds')
-    datasets.DatasetDict({"train": ds_t2, "validation": ds_t1}).save_to_disk('./training_datasets/training_t2_test_t1_no_spec.ds')
+    datasets.DatasetDict({"train": ds_t1, "validation": ds_t2}).save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_t1_test_t2_no_spec.ds'))
+    datasets.DatasetDict({"train": ds_t2, "validation": ds_t1}).save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_t2_test_t1_no_spec.ds'))
 
     ds_t1_spec = create_ds_from_df(df_t1, add_word_spec=True)
     ds_t2_spec = create_ds_from_df(df_t2, add_word_spec=True)
 
-    datasets.DatasetDict({"train": ds_t1_spec, "validation": ds_t2_spec}).save_to_disk('./training_datasets/training_t1_test_t2_with_spec.ds')
-    datasets.DatasetDict({"train": ds_t2_spec, "validation": ds_t1_spec}).save_to_disk('./training_datasets/training_t2_test_t1_with_spec.ds')
+    datasets.DatasetDict({"train": ds_t1_spec, "validation": ds_t2_spec}).save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_t1_test_t2_with_spec.ds'))
+    datasets.DatasetDict({"train": ds_t2_spec, "validation": ds_t1_spec}).save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_t2_test_t1_with_spec.ds'))
 
     all_no_spec = datasets.concatenate_datasets([ds_t1, ds_t2]).train_test_split(test_size=0.2)
     all_no_spec["validation"] = all_no_spec["test"]
     del all_no_spec["test"]
-    all_no_spec.save_to_disk('./training_datasets/training_data_all_no_spec.ds')
+    all_no_spec.save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_data_all_no_spec.ds'))
 
     all_spec = datasets.concatenate_datasets([ds_t1_spec, ds_t2_spec]).train_test_split(test_size=0.2)
     all_spec["validation"] = all_spec["test"]
     del all_spec["test"]
-    all_spec.save_to_disk('./training_datasets/training_data_all_with_spec.ds')
+    all_spec.save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_data_all_with_spec.ds'))

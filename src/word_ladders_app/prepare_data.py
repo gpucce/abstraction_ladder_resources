@@ -1,5 +1,6 @@
 import pandas as pd
 import ast
+import os
 
 def try_parse_list(s):
     """Try to parse a string representation of a list into an actual list."""
@@ -12,10 +13,11 @@ def correct_refusi(word, map_refusi):
     return map_refusi.get(word, word)
 
 def main():
-    black_lists = pd.read_excel("./Liste word ladders.xlsx")
-    refusi = pd.read_excel("./refusi.xlsx")
+    file_dir_path = os.path.dirname(__file__)
+    black_lists = pd.read_excel(os.path.join(file_dir_path, "Liste word ladders.xlsx"))
+    refusi = pd.read_excel(os.path.join(file_dir_path, "refusi.xlsx"))
 
-    df = pd.read_excel("./WORDLADDERS_laddercheck_20240301.xlsx")
+    df = pd.read_excel(os.path.join(file_dir_path, "WORDLADDERS_laddercheck_20240301.xlsx"))
     df.ladder = df.ladder.apply(try_parse_list)
 
     map_refusi = {}
@@ -29,8 +31,10 @@ def main():
         df.ladder.apply(lambda x: all(len(i) > 2 for i in x))
     )
     df["to_keep"] = to_keep
+    df.to_excel('./word_ladders_to_annotate.xlsx')
+
     df = df[df.to_keep].drop(columns=["to_keep"])
-    df.to_csv('./word_ladders_cleaned.csv', index=False, sep="\t")
+    df.to_csv(os.path.join(file_dir_path, './word_ladders_cleaned.csv'), index=False, sep="\t")
 
 if __name__ == "__main__":
     main()
