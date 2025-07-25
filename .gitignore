@@ -1,3 +1,5 @@
+conda_venv
+.vscode
 *.ds
 multirun/
 outputs/
