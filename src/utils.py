@@ -1,4 +1,4 @@
-
+import os
 
 def tokenize_and_align_labels(examples, tokenizer, label_to_id):
     tokenized_inputs = tokenizer(
@@ -32,3 +32,7 @@ def tokenize_and_align_labels(examples, tokenizer, label_to_id):
         labels.append(label_ids)
     tokenized_inputs["labels"] = labels
     return tokenized_inputs
+
+def exist_df(file_path):
+    """Check if a DataFrame exists at the given file path."""
+    return os.path.exists(file_path)

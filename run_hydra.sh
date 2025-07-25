@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=1 python -m src.primary_school.primary_school_experiments.hydra_run_ner_no_trainer -m hydra.job.chdir=True
+CUDA_VISIBLE_DEVICES=1 python -m src.primary_school.experiments -m hydra.job.chdir=True
