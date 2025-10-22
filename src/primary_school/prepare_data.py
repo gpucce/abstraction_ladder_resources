@@ -37,10 +37,11 @@ def polish_list(x):
 
 def create_ds_from_df(df, add_word_spec=False):
     ds = datasets.Dataset.from_pandas(
-        df.reset_index().loc[:, ["index","hypernym", "hyponym", "word", "words_excluded"]])
+        df.reset_index().loc[:, ["index", "participants", "hypernym", "hyponym", "word", "words_excluded"]])
     ds = ds.map(lambda x: {
         "hypernym": x["hypernym"] if x["hypernym"] is not None else "",
         "hyponym": x["hyponym"] if x["hyponym"] is not None else "",
+        "id": str(x["index"]) + "_" + x["participants"],
     })
 
     # clean specific entry
@@ -108,12 +109,12 @@ if __name__ == "__main__":
     datasets.DatasetDict({"train": ds_t1_spec, "validation": ds_t2_spec}).save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_t1_test_t2_with_spec.ds'))
     datasets.DatasetDict({"train": ds_t2_spec, "validation": ds_t1_spec}).save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_t2_test_t1_with_spec.ds'))
 
-    all_no_spec = datasets.concatenate_datasets([ds_t1, ds_t2]).train_test_split(test_size=0.2)
+    all_no_spec = datasets.concatenate_datasets([ds_t1, ds_t2]).train_test_split(test_size=0.2, seed=42)
     all_no_spec["validation"] = all_no_spec["test"]
     del all_no_spec["test"]
     all_no_spec.save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_data_all_no_spec.ds'))
 
-    all_spec = datasets.concatenate_datasets([ds_t1_spec, ds_t2_spec]).train_test_split(test_size=0.2)
+    all_spec = datasets.concatenate_datasets([ds_t1_spec, ds_t2_spec]).train_test_split(test_size=0.2, seed=42)
     all_spec["validation"] = all_spec["test"]
     del all_spec["test"]
     all_spec.save_to_disk(os.path.join(file_dir_path, 'training_datasets/training_data_all_with_spec.ds'))
