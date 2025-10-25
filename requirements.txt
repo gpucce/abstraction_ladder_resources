@@ -1,0 +1,6 @@
+hydra-core
+transformers
+datasets
+pandas
+ipykernel
+ipywidgets
