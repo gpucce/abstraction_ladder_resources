@@ -12,13 +12,9 @@ To replicate all experiments it should be enough to run the following
 ```bash
 conda activate conda_venv/
 python -m src.primary_school.prepare_data
-bash run_hydra.sh
+# run the various experiments
+bash run_hydra_primary_school_...
 python -m src.primary_school.tables_and_figures
 ```
 
-Afterwards the `plotting.ipynb` should create all the figures in the paper, you might need to create the `plots` and `tables` folder by hand 
-
-```bash
-mkdir plots
-mkdir tables
-```
+Afterwards the `src/primary_school/paper_plots/plotting.ipynb` should create all the figures in the paper, you might need to create the `plots` and `tables` folder by hand in the `src/primary_school/paper_plots` directory.
