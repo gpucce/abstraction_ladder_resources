@@ -1,10 +1,12 @@
 import os
 import yaml
 import spacy
+import argparse
 import pandas as pd
 import copy
 import transformers
 import torch
+from pathlib import Path
 from datasets import load_from_disk
 
 from tqdm.auto import tqdm
@@ -178,7 +180,7 @@ def _aggregate_metrics(metrics, ds, prefix=""):
     metrics[f"{prefix}precision"] = metrics[f"{prefix}tp"] / (metrics[f"{prefix}tp"] + metrics[f"{prefix}fp"])
     metrics[f"{prefix}recall"] = metrics[f"{prefix}tp"] / (metrics[f"{prefix}tp"] + metrics[f"{prefix}fn"])
     metrics[f"{prefix}f1"] = (2 * metrics[f"{prefix}tp"]) / (2 * metrics[f"{prefix}tp"] + metrics[f"{prefix}fp"] + metrics[f"{prefix}fn"])
-    metrics[f"{prefix}accuracy"] = (metrics[f"{prefix}tp"] + metrics["tn"]) / (metrics["tp"] + metrics[f"{prefix}tn"] + metrics[f"{prefix}fp"] + metrics[f"{prefix}fn"])
+    metrics[f"{prefix}accuracy"] = (metrics[f"{prefix}tp"] + metrics[f"{prefix}tn"]) / (metrics[f"{prefix}tp"] + metrics[f"{prefix}tn"] + metrics[f"{prefix}fp"] + metrics[f"{prefix}fn"])
     metrics[f"{prefix}list accuracy"] = metrics[f"{prefix}List Acc"] / len(ds)
     metrics[f"{prefix}list accuracy @1"] = metrics[f"{prefix}List Acc @1"] / len(ds)
     metrics[f"{prefix}list accuracy @2"] = metrics[f"{prefix}List Acc @2"] / len(ds)
@@ -207,6 +209,22 @@ def get_metrics(ds):
 
     return metrics
 
+def get_model_name(run_path):
+    runs = os.listdir(run_path)
+    models = []
+    for run in runs:
+        if run.endswith(".yaml"):
+            continue
+        with open(os.path.join(run_path, run, ".hydra", "config.yaml")) as f:
+            config = yaml.safe_load(f)
+        models.append(config["model"]["model_name_or_path"])
+
+    # models_sign = [i.split("/")[-2] for i in models]
+    assert len(set(models)) == 1, f"Expected exactly one model for dataset, found {models}"
+
+    return models[0]
+
+
 def run_eval(experiment_name, dataset_name, run_path, file_dir_path, rerun=False, rerun_adj=False):
     if exist_df(os.path.join(file_dir_path, f"{experiment_name}_results.ds")) and not rerun:
         ds = load_from_disk(os.path.join(file_dir_path, f"{experiment_name}_results.ds"))
@@ -214,6 +232,8 @@ def run_eval(experiment_name, dataset_name, run_path, file_dir_path, rerun=False
         model_name_or_path = None
         runs = os.listdir(run_path)
         for run in runs:
+            if run.endswith(".yaml"):
+                continue
             with open(os.path.join(run_path, run, ".hydra", "config.yaml")) as f:
                 config = yaml.safe_load(f)
             if config["args"]["dataset_name"].split('/')[-1] == dataset_name.split('/')[-1]:
@@ -223,7 +243,7 @@ def run_eval(experiment_name, dataset_name, run_path, file_dir_path, rerun=False
         assert model_name_or_path is not None, f"Model not found for dataset {dataset_name}"
 
         model = transformers.AutoModelForTokenClassification.from_pretrained(
-            model_name_or_path,trust_remote_code=True,)
+            model_name_or_path, trust_remote_code=True,)
         model.to("cuda")
         tokenizer = transformers.AutoTokenizer.from_pretrained(
             model_name_or_path, trust_remote_code=True,)
@@ -251,17 +271,71 @@ def run_eval(experiment_name, dataset_name, run_path, file_dir_path, rerun=False
         word_metrics[word.strip()] = get_metrics(ds.filter(lambda x: x["word"].strip() == word.strip()))
     return all_metrics, word_metrics
 
+def merge_base_results(root_path: str | Path) -> pd.DataFrame:
+    """
+    Scans a directory for subdirectories named 'results-*', loads
+    'primary_school_all_metrics.csv' from each, filters for 'base'
+    experiment rows, and merges them into a single DataFrame.
+
+    Args:
+        root_path: Path to the directory containing 'results-*' subdirs.
+
+    Returns:
+        A merged DataFrame with all base rows and a 'Model' column
+        derived from the results directory name.
+    """
+    root = Path(root_path)
+    results_dirs = sorted(root.glob("results-*"))
+
+    if not results_dirs:
+        raise FileNotFoundError(f"No 'results-*' directories found in {root}")
+
+    dfs = []
+    for results_dir in results_dirs:
+        csv_path = results_dir / "primary_school_all_metrics.csv"
+        if not csv_path.exists():
+            print(f"Warning: {csv_path} not found, skipping.")
+            continue
+
+        df = pd.read_csv(csv_path)
+        base_df = df[df["Experiment"] == "base"].copy()
+        base_df["Model"] = results_dir.name  # e.g. "results-gpt4"
+
+        dfs.append(base_df)
+
+    if not dfs:
+        raise FileNotFoundError("No valid CSV files were loaded.")
+
+    merged = pd.concat(dfs, ignore_index=True)
+    cols = ["Model"] + [c for c in merged.columns if c != "Model"]
+    return merged[cols]
+
 def main():
     import sys
 
-    rerun = len(sys.argv) > 1 and sys.argv[1] == "rerun"
-    rerun_adj = len(sys.argv) > 1 and sys.argv[1] == "rerun_adj"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    run_path = "./multirun/2025-10-21/10-52-06/"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--rerun", action="store_true", help="Rerun the evaluation")
+    parser.add_argument("--rerun_adj", action="store_true", help="Rerun only the adj/wordnet results")
+    parser.add_argument("--run_path", type=str, default="./multirun/2025-10-21/10-52-06/")
+    parser.add_argument("--device", type=str, default="1")
+    parser.add_argument("--aggregate_results", action="store_true", help="Aggregate results into LaTeX tables", default=False)
+    parser.add_argument("--aggregate_output_file", type=str, default=None)
+    args = parser.parse_args()
 
-    file_dir_path = os.path.join(os.path.dirname(__file__), "results")
+
+    rerun = args.rerun
+    rerun_adj = args.rerun_adj
+    run_path = args.run_path
+    model_name = get_model_name(run_path)
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.device
+
+
+    file_dir_path = os.path.join(os.path.dirname(__file__), f"results-{model_name.split('/')[-1]}")
+    print("FILE DIR PATH", file_dir_path)
     os.makedirs(file_dir_path, exist_ok=True)
-    if not exist_df(os.path.join(file_dir_path, "primary_school_results.csv")) or rerun or rerun_adj:
+    if args.aggregate_results:
+        merged = merge_base_results(os.path.dirname(__file__))
+    elif not exist_df(os.path.join(file_dir_path, "primary_school_results.csv")) or rerun or rerun_adj:
         experiments_data_map = {
             "all_with_spec": "./src/primary_school/training_datasets/training_data_all_with_spec.ds",
             "t1_vs_t2_with_spec": "./src/primary_school/training_datasets/training_t1_test_t2_with_spec.ds",
@@ -286,8 +360,7 @@ def main():
         df = pd.read_csv(os.path.join(file_dir_path, "primary_school_results.csv"), index_col=0)
         words_df = pd.read_csv(os.path.join(file_dir_path, "primary_school_word_results.csv"), index_col=0)
 
-    # Rename for better LaTeX readability
-    df = df.reset_index().rename({"index": "Setting"}, axis=1)
+
     def prepare_for_latex(df, prefix="", output_file_name=None):
 
         if prefix:
@@ -306,7 +379,15 @@ def main():
             f"{prefix}list accuracy @2": f"{prefix}List Acc@2"
         })
 
-        stacked_df = df[["Setting", f"{prefix}Precision", f"{prefix}Recall", f"{prefix}F1-score", f"{prefix}Accuracy", f"{prefix}List Accu", f"{prefix}List Acc@1", f"{prefix}List Acc@2"]]
+
+
+        # Select only the desired columns
+        columns = [f"Setting", f"{prefix}Precision", f"{prefix}Recall", f"{prefix}F1-score", f"{prefix}Accuracy", f"{prefix}List Accu", f"{prefix}List Acc@1", f"{prefix}List Acc@2"]
+        if "Model" in df.columns:
+            columns = ["Model"] + columns
+
+        stacked_df = df[columns]
+
         stacked_df = stacked_df.rename(columns={
             # f"name": f"{prefix}Setting",
             f"{prefix}Precision": f"Precision",
@@ -322,8 +403,8 @@ def main():
         stacked_df["Experiment"] = prefix[:-1] if prefix else "base"
         stacked_df[f"Setting"] = stacked_df["Setting"].str.replace("_", " ").str.title()
 
-        # Select only the desired columns
-        latex_df = df[[f"Setting", f"{prefix}Precision", f"{prefix}Recall", f"{prefix}F1-score", f"{prefix}Accuracy", f"{prefix}List Accu", f"{prefix}List Acc@1", f"{prefix}List Acc@2"]]
+
+        latex_df = df[columns]
 
         # Round metrics for better formatting
         latex_df = latex_df.round(3)
@@ -336,10 +417,34 @@ def main():
         latex_code = latex_df.to_latex(
             index=False, float_format="%.3f", column_format='lcccccccc', escape=False)
 
-        with open(os.path.join(file_dir_path, output_file_name), "w") as f:
-            f.write(latex_code)
+        if not args.aggregate_results:
+            with open(os.path.join(file_dir_path, output_file_name), "w") as f:
+                f.write(latex_code)
 
         return stacked_df
+
+    if args.aggregate_results:
+        aggregated_df = prepare_for_latex(merged, output_file_name="primary_school_aggregated_metrics.tex")
+        aggregated_df = aggregated_df.drop(columns=["Experiment"])
+        aggregated_df["Model"] = aggregated_df["Model"].str.replace("results-", "").str.capitalize()
+        # aggregated_df["Model"] = aggregated_df["Model"].apply(lambda x: f"\\rotatebox[origin=l]{{90}}{{{x}}}")
+        latex_code = aggregated_df.set_index(["Model", "Setting"]).to_latex(
+            float_format="%.3f", column_format='llccccccc', escape=False)
+        latex_code = (latex_code
+            .replace(r"\cline", r"\cmidrule")
+            .replace(r"Bert_uncased_l-12_h-768_a-12_italian_alb3rt0", r"AlBERTo")
+            .replace(r"multirow[t]", "multirow[c]"))
+        aggregate_output_path = os.path.join(os.path.dirname(__file__), f"aggregated_primary_school_metrics.tex")
+        if args.aggregate_output_file:
+            aggregate_output_path = args.aggregate_output_file
+
+        with open(aggregate_output_path, "w") as f:
+            f.write(latex_code)
+
+        return
+
+    # Rename for better LaTeX readability
+    df = df.reset_index().rename({"index": "Setting"}, axis=1)
 
     base_df = prepare_for_latex(df)
     adj_df = prepare_for_latex(df, prefix="adj")

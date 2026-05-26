@@ -1,0 +1,3 @@
+model_name_or_path: "m-polignano/bert_uncased_L-12_H-768_A-12_italian_alb3rt0"
+device: "1"
+learning_rate: 5e-05

@@ -3,7 +3,7 @@ import os
 def tokenize_and_align_labels(examples, tokenizer, label_to_id):
     tokenized_inputs = tokenizer(
         examples["full_list"],
-        max_length=512,
+        max_length=256,
         padding='max_length',
         truncation=True,
         # We use this argument because the texts in our dataset are lists of words (with a label for each word).

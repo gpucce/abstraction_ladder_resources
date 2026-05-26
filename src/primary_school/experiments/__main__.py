@@ -130,10 +130,10 @@ def main(cfg):
 
     if config.model_type in {"bloom", "gpt2", "roberta"}:
         tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name_or_path, use_fast=True, add_prefix_space=True, trust_remote_code=True)
+            tokenizer_name_or_path, use_fast=True, add_prefix_space=True, trust_remote_code=True, model_max_length=512)
     else:
         tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name_or_path, use_fast=True, trust_remote_code=True)
+            tokenizer_name_or_path, use_fast=True, trust_remote_code=True, model_max_length=512)
 
     model = AutoModelForTokenClassification.from_pretrained(
         model_name_or_path, config=config, trust_remote_code=True,)
@@ -236,7 +236,7 @@ def main(cfg):
 
     # Optimizer
     # Split weights in two groups, one with weight decay and the other not.
-    no_decay = ["bias", "LayerNorm.weight"]
+    no_decay = ["bias", "LayerNorm.weight", "norm.weight"]
     optimizer_grouped_parameters = [
         {
             "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
@@ -247,7 +247,7 @@ def main(cfg):
             "weight_decay": 0.0,
         },
     ]
-    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=cfg.model.learning_rate)
 
     # Use the device given by the `accelerator` object.
     device = accelerator.device
