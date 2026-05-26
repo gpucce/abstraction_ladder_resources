@@ -24,6 +24,10 @@ bash run_hydra_primary_school_alberto.sh
 bash run_hydra_primary_school_modern_bert.sh
 bash run_hydra_primary_school_roberta.sh
 bash run_hydra_primary_school_xlm_roberta.sh
+
+# here you need to edit the run_eval.sh script adding the paths to the outputs of the hydra experiments
+bash run_eval.sh
+
 python -m src.primary_school.tables_and_figures
 ```
 
